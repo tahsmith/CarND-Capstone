@@ -17,7 +17,7 @@ class Controller(object):
                                             max_lat_accel,
                                             max_steer_angle)
 
-        self.throttle_controller = PID(kp=-0.3, ki=-0.1, kd=0.0, mn=0.1, mx=2)
+        self.throttle_controller = PID(kp=-0.3, ki=-0.1, kd=0.0, mn=0.1, mx=1)
 
     def control(self, dbw_enabled, v_actual, v_target, omega_actual,
                 omega_target):
