@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+from operator import attrgetter
 
 import rospy
 from std_msgs.msg import Bool
@@ -31,6 +32,16 @@ that we have created in the `__init__` function.
 
 '''
 
+unpack_twist_vec = attrgetter('x', 'y', 'z')
+
+
+def unpack_twist_message(message):
+    return (
+        unpack_twist_vec(message.twist.linear),
+        unpack_twist_vec(message.twist.angular)
+    )
+
+
 class DBWNode(object):
     def __init__(self):
         rospy.init_node('dbw_node')
@@ -53,25 +64,43 @@ class DBWNode(object):
         self.brake_pub = rospy.Publisher('/vehicle/brake_cmd',
                                          BrakeCmd, queue_size=1)
 
+        min_speed = 0.1
+
         # TODO: Create `Controller` object
-        # self.controller = Controller(<Arguments you wish to provide>)
+        self.controller = Controller(
+            wheel_base, steer_ratio, min_speed, max_lat_accel,
+            max_steer_angle
+        )
 
         # TODO: Subscribe to all the topics you need to
+        rospy.Subscriber('/vehicle/dbw_enabled', Bool, self.dbw_enabled_cb)
+        rospy.Subscriber('/current_velocity', TwistStamped,
+                         self.velocity_actual_cb)
+        rospy.Subscriber('/twist_cmd', TwistStamped,
+                         self.twist_cmd_cb)
+
+        self.dbw_enabled = True
+        self.v_target = (0.0, 0.0, 0.0)
+        self.omega_target = (0.0, 0.0, 0.0)
+        self.v_actual = (0.0, 0.0, 0.0)
+        self.omega_actual = (0.0, 0.0, 0.0)
 
         self.loop()
 
     def loop(self):
-        rate = rospy.Rate(50) # 50Hz
+        rate = rospy.Rate(50)  # 50Hz
         while not rospy.is_shutdown():
             # TODO: Get predicted throttle, brake, and steering using `twist_controller`
             # You should only publish the control commands if dbw is enabled
-            # throttle, brake, steering = self.controller.control(<proposed linear velocity>,
-            #                                                     <proposed angular velocity>,
-            #                                                     <current linear velocity>,
-            #                                                     <dbw status>,
-            #                                                     <any other argument you need>)
-            # if <dbw is enabled>:
-            #   self.publish(throttle, brake, steer)
+            throttle, brake, steering = self.controller.control(
+                self.dbw_enabled,
+                self.v_actual,
+                self.v_target,
+                self.omega_actual,
+                self.omega_target
+            )
+            if self.dbw_enabled:
+                self.publish(throttle, brake, steering)
             rate.sleep()
 
     def publish(self, throttle, brake, steer):
@@ -91,6 +120,15 @@ class DBWNode(object):
         bcmd.pedal_cmd_type = BrakeCmd.CMD_TORQUE
         bcmd.pedal_cmd = brake
         self.brake_pub.publish(bcmd)
+
+    def dbw_enabled_cb(self, message):
+        self.dbw_enabled = message.data
+
+    def velocity_actual_cb(self, message):
+        self.v_actual, self.omega_actual = unpack_twist_message(message)
+
+    def twist_cmd_cb(self, message):
+        self.v_target, self.omega_target = unpack_twist_message(message)
 
 
 if __name__ == '__main__':
