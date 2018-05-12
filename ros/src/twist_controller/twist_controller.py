@@ -24,6 +24,7 @@ class Controller(object):
         # TODO: Change the arg, kwarg list to suit your needs
         if not dbw_enabled:
             self.throttle_controller.reset()
+            return 0.0, 0.0, 0.0
 
         linear_velocity = v_target[0]
         angular_velocity = omega_target[2]
